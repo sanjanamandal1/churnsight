@@ -1,4 +1,4 @@
-import streamlit as st
+﻿import streamlit as st
 import pandas as pd
 import numpy as np
 import pickle
@@ -13,7 +13,7 @@ from explain import batch_explain, get_shap_explainer, get_shap_values, get_top_
 from risk_segmentor import assign_risk_tiers, estimate_revenue_saved
 from recommender import get_recommendations, get_bulk_recommendations
 
-st.set_page_config(page_title="ChurnSight", page_icon="??", layout="wide")
+st.set_page_config(page_title="ChurnSight", page_icon="telescope", layout="wide")
 
 # -- Load model artifacts ----------------------------------------------
 @st.cache_resource
@@ -51,23 +51,32 @@ def load_and_score_data():
 
 # -- Sidebar navigation ------------------------------------------------
 st.sidebar.image("https://img.icons8.com/fluency/96/telescope.png", width=60)
-st.sidebar.title("?? ChurnSight")
+st.sidebar.title("ChurnSight")
 st.sidebar.markdown("*Explainable Churn Intelligence*")
 page = st.sidebar.radio("Navigate", [
-    "?? Overview",
-    "?? Customer Risk Table",
-    "?? Bulk Scorer",
-    "?? Model Performance"
+    "Overview",
+    "Customer Risk Table",
+    "Bulk Scorer",
+    "Model Performance"
 ])
 
 model, scaler, feature_names, metrics = load_artifacts()
+
+# ── Custom CSS ────────────────────────────────────────────────────────
+def load_css():
+    css_path = os.path.join(os.path.dirname(__file__), "style.css")
+    if os.path.exists(css_path):
+        with open(css_path) as f:
+            st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+
+load_css()
 scored_df, X_test, shap_df, y_test = load_and_score_data()
 
 # -----------------------------------------------------------------------
-# PAGE 1 � OVERVIEW
+# PAGE 1 — OVERVIEW
 # -----------------------------------------------------------------------
-if page == "?? Overview":
-    st.title("?? ChurnSight � Overview")
+if page == "Overview":
+    st.title("ChurnSight — Overview")
     st.markdown("---")
 
     total = len(scored_df)
@@ -79,8 +88,8 @@ if page == "?? Overview":
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Total Customers", f"{total:,}")
     c2.metric("Churn Rate", f"{churn_rate}%")
-    c3.metric("?? Revenue at Risk", f"${revenue_at_risk:,.0f}/mo")
-    c4.metric("?? Est. Revenue Saveable", f"${revenue_saved:,.0f}/mo")
+    c3.metric("Revenue at Risk", f"${revenue_at_risk:,.0f}/mo")
+    c4.metric("Est. Revenue Saveable", f"${revenue_saved:,.0f}/mo")
 
     st.markdown("---")
     col1, col2 = st.columns(2)
@@ -125,15 +134,15 @@ if page == "?? Overview":
         st.plotly_chart(fig4, width='stretch')
 
 # -----------------------------------------------------------------------
-# PAGE 2 � CUSTOMER RISK TABLE
+# PAGE 2 — CUSTOMER RISK TABLE
 # -----------------------------------------------------------------------
-elif page == "?? Customer Risk Table":
-    st.title("?? Customer Risk Table")
+elif page == "Customer Risk Table":
+    st.title("Customer Risk Table")
     st.markdown("---")
 
     tier_filter = st.multiselect("Filter by Risk Tier",
                                   ["High Risk", "Medium Risk", "Low Risk"],
-                                  default=["High Risk", "Medium Risk"])
+                                  default=["High Risk", "Medium Risk", "Low Risk"])
 
     filtered = scored_df[scored_df["risk_tier"].isin(tier_filter)].copy()
     filtered["churn_probability"] = filtered["churn_probability"].apply(lambda x: f"{x:.1%}")
@@ -149,7 +158,7 @@ elif page == "?? Customer Risk Table":
     )
 
     st.markdown("---")
-    st.subheader("?? Deep Dive � Individual Customer")
+    st.subheader("?? Deep Dive — Individual Customer")
     customer_idx = st.number_input("Enter customer index (row number above)",
                                     min_value=0, max_value=len(scored_df)-1, value=0)
 
@@ -186,9 +195,9 @@ elif page == "?? Customer Risk Table":
                 st.info(f"{r['icon']} **{r['action']}**  \n_{r['reason']}_ {pc} {r['priority']} Priority")
 
 # -----------------------------------------------------------------------
-# PAGE 3 � BULK SCORER
+# PAGE 3 — BULK SCORER
 # -----------------------------------------------------------------------
-elif page == "?? Bulk Scorer":
+elif page == "Bulk Scorer":
     st.title("?? Bulk CSV Scorer")
     st.markdown("Upload a customer CSV to get churn scores and recommendations.")
     st.markdown("---")
@@ -207,10 +216,10 @@ elif page == "?? Bulk Scorer":
                             data=csv, file_name="churnsight_results.csv", mime="text/csv")
 
 # -----------------------------------------------------------------------
-# PAGE 4 � MODEL PERFORMANCE
+# PAGE 4 — MODEL PERFORMANCE
 # -----------------------------------------------------------------------
-elif page == "?? Model Performance":
-    st.title("?? Model Performance")
+elif page == "Model Performance":
+    st.title("Model Performance")
     st.markdown("---")
 
     c1, c2, c3, c4, c5 = st.columns(5)
