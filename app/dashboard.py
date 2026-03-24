@@ -14,6 +14,13 @@ from risk_segmentor import assign_risk_tiers, estimate_revenue_saved
 from recommender import get_recommendations, get_bulk_recommendations
 from analytics import compute_health_score, get_health_label, simulate_churn_trend
 
+# Auto-train if models don't exist
+import os
+if not os.path.exists("models/ensemble_model.pkl"):
+    st.warning("Training model for first time — this takes 3-5 minutes...")
+    import subprocess
+    subprocess.run(["python", "src/train.py"], check=True)
+    
 st.set_page_config(page_title="ChurnSight", page_icon="telescope", layout="wide")
 
 @st.cache_resource
