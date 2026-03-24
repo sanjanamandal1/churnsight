@@ -67,7 +67,7 @@ page = st.sidebar.radio("Navigate", [
     "Customer Risk Table",
     "Bulk Scorer",
     "Model Performance",
-    "Advanced Analytics"
+    "Advanced Analytics",
     "What-if Simulator"
 ])
 
