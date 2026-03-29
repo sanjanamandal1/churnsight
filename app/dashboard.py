@@ -1,25 +1,22 @@
-﻿import streamlit as st
+﻿import sys
+import os
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SRC = os.path.join(ROOT, 'src')
+if SRC not in sys.path:
+    sys.path.insert(0, SRC)
+
+import streamlit as st
 import pandas as pd
 import numpy as np
 import pickle
 import plotly.express as px
 import plotly.graph_objects as go
-import sys
-import os
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 from preprocess import run_preprocessing
 from explain import batch_explain, get_shap_explainer, get_shap_values, get_top_drivers
 from risk_segmentor import assign_risk_tiers, estimate_revenue_saved
 from recommender import get_recommendations, get_bulk_recommendations
 from analytics import compute_health_score, get_health_label, simulate_churn_trend
-
-# Auto-train if models don't exist
-import os
-if not os.path.exists("models/ensemble_model.pkl"):
-    st.warning("Training model for first time — this takes 3-5 minutes...")
-    import subprocess
-    subprocess.run(["python", "src/train.py"], check=True)
 
 st.set_page_config(page_title="ChurnSight", page_icon="telescope", layout="wide")
 
@@ -68,7 +65,8 @@ page = st.sidebar.radio("Navigate", [
     "Bulk Scorer",
     "Model Performance",
     "Advanced Analytics",
-    "What-if Simulator"
+    "What-if Simulator",
+    "ROI Simulator"
 ])
 
 model, scaler, feature_names, metrics = load_artifacts()
@@ -105,7 +103,7 @@ if page == "Overview":
                                color=scored_df["Churn"].map({1: "Churned", 0: "Retained"}),
                                barmode="group",
                                color_discrete_map={"Churned": "#ef4444", "Retained": "#22c55e"})
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, use_container_width=True)
 
     with col2:
         st.subheader("Risk Tier Distribution")
@@ -114,7 +112,7 @@ if page == "Overview":
         colors = {"High Risk": "#ef4444", "Medium Risk": "#f59e0b", "Low Risk": "#22c55e"}
         fig2 = px.pie(tier_counts, names="tier", values="count",
                       color="tier", color_discrete_map=colors, hole=0.4)
-        st.plotly_chart(fig2, width="stretch")
+        st.plotly_chart(fig2, use_container_width=True)
 
     col3, col4 = st.columns(2)
 
@@ -125,7 +123,7 @@ if page == "Overview":
                       y="MonthlyCharges",
                       color=scored_df["Churn"].map({1: "Churned", 0: "Retained"}),
                       color_discrete_map={"Churned": "#ef4444", "Retained": "#22c55e"})
-        st.plotly_chart(fig3, width="stretch")
+        st.plotly_chart(fig3, use_container_width=True)
 
     with col4:
         st.subheader("Churn by Tenure Group")
@@ -136,7 +134,7 @@ if page == "Overview":
         tenure_churn.columns = ["Tenure Group", "Churn Rate"]
         fig4 = px.bar(tenure_churn, x="Tenure Group", y="Churn Rate",
                       color="Churn Rate", color_continuous_scale="Reds")
-        st.plotly_chart(fig4, width="stretch")
+        st.plotly_chart(fig4, use_container_width=True)
 
 # -----------------------------------------------------------------------
 # PAGE 2 - CUSTOMER RISK TABLE
@@ -156,7 +154,7 @@ elif page == "Customer Risk Table":
                     "churn_probability", "risk_tier", "top_recommendation"]
     display_cols = [c for c in display_cols if c in filtered.columns]
 
-    st.dataframe(filtered[display_cols].reset_index(drop=True), width="stretch", height=400)
+    st.dataframe(filtered[display_cols].reset_index(drop=True), use_container_width=True, height=400)
 
     st.markdown("---")
     st.subheader("Deep Dive — Individual Customer")
@@ -186,7 +184,7 @@ elif page == "Customer Risk Table":
             ))
             fig_shap.update_layout(title="SHAP Feature Contributions",
                                    xaxis_title="SHAP Value", height=400)
-            st.plotly_chart(fig_shap, width="stretch")
+            st.plotly_chart(fig_shap, use_container_width=True)
 
             st.markdown("#### Retention Recommendations")
             recs = get_recommendations(top_pos)
@@ -243,7 +241,7 @@ elif page == "Model Performance":
                                       line=dict(dash="dash", color="gray")))
         fig_roc.update_layout(xaxis_title="False Positive Rate",
                                yaxis_title="True Positive Rate", height=400)
-        st.plotly_chart(fig_roc, width="stretch")
+        st.plotly_chart(fig_roc, use_container_width=True)
 
     with col2:
         st.subheader("Confusion Matrix")
@@ -253,12 +251,12 @@ elif page == "Model Performance":
                            x=["Not Churned", "Churned"],
                            y=["Not Churned", "Churned"],
                            color_continuous_scale="Blues")
-        st.plotly_chart(fig_cm, width="stretch")
+        st.plotly_chart(fig_cm, use_container_width=True)
 
     st.subheader("Model Notes")
     st.markdown("""
-    - **Model**: XGBoost + LightGBM Soft Voting Ensemble
-    - **Tuning**: Optuna (20 trials per model)
+    - **Model**: XGBoost + LightGBM Stacking Ensemble with Logistic Regression meta-learner
+    - **Tuning**: Optuna (30 trials per model)
     - **Imbalance**: Handled via SMOTE on training set only
     - **Explainability**: SHAP TreeExplainer on XGBoost sub-model
     - **Dataset**: Telco Customer Churn (Kaggle)
@@ -293,14 +291,14 @@ elif page == "Advanced Analytics":
                                 "Struggling": "#f97316", "Critical": "#ef4444"},
             nbins=30, title="Health Score Distribution"
         )
-        st.plotly_chart(fig_health, width="stretch")
+        st.plotly_chart(fig_health, use_container_width=True)
 
         st.markdown("#### Bottom 10 — Most Critical Customers")
         bottom10 = health_df.nsmallest(10, "health_score")[
             ["gender", "tenure", "MonthlyCharges", "churn_probability",
              "risk_tier", "health_score", "health_label"]
         ].reset_index(drop=True)
-        st.dataframe(bottom10, width="stretch")
+        st.dataframe(bottom10, use_container_width=True)
 
     with tab2:
         st.subheader("Decision Threshold Tuner")
@@ -334,7 +332,7 @@ elif page == "Advanced Analytics":
                             y=["Not Churned", "Churned"],
                             color_continuous_scale="Blues",
                             title=f"Confusion Matrix at Threshold {threshold:.2f}")
-        st.plotly_chart(fig_cm2, width="stretch")
+        st.plotly_chart(fig_cm2, use_container_width=True)
 
     with tab3:
         st.subheader("Churn Trend Simulation")
@@ -362,7 +360,7 @@ elif page == "Advanced Analytics":
             title="Customer Retention Simulation (per 1000 customers)",
             xaxis_title="Month", yaxis_title="Remaining Customers", height=400
         )
-        st.plotly_chart(fig_trend, width="stretch")
+        st.plotly_chart(fig_trend, use_container_width=True)
 
         saved = with_action["remaining_customers"].iloc[-1] - no_action["remaining_customers"].iloc[-1]
         revenue_saved = round(saved * scored_df["MonthlyCharges"].mean(), 2)
@@ -489,4 +487,87 @@ elif page == "What-if Simulator":
                 pc = priority_color.get(r["priority"], "")
                 st.info(f"{r['icon']} **{r['action']}**  \n_{r['reason']}_ {pc} {r['priority']} Priority")
         except Exception as e:
-            st.error("Error: " + str(e))        
+            st.error("Error: " + str(e))
+
+# -----------------------------------------------------------------------
+# PAGE 7 - ROI SIMULATOR
+# -----------------------------------------------------------------------
+elif page == "ROI Simulator":
+    st.title("ROI Simulator")
+    st.markdown("Estimate the business return on your churn retention investment.")
+    st.markdown("---")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.subheader("Business Inputs")
+        total_customers = st.number_input("Total Customer Base", value=7000, step=100)
+        avg_monthly_revenue = st.number_input("Avg Monthly Revenue per Customer ($)", value=65, step=5)
+        churn_rate = st.slider("Current Monthly Churn Rate (%)", 1.0, 30.0, 26.5, 0.5)
+        retention_budget = st.number_input("Monthly Retention Budget ($)", value=10000, step=500)
+        cost_per_intervention = st.number_input("Cost per Retention Intervention ($)", value=50, step=5)
+        success_rate = st.slider("Intervention Success Rate (%)", 10, 90, 30, 5)
+
+    with col2:
+        st.subheader("Revenue Impact")
+        monthly_churners = int(total_customers * churn_rate / 100)
+        revenue_lost_no_action = monthly_churners * avg_monthly_revenue
+        max_interventions = int(retention_budget / cost_per_intervention)
+        customers_targeted = min(monthly_churners, max_interventions)
+        customers_saved = int(customers_targeted * success_rate / 100)
+        revenue_saved = customers_saved * avg_monthly_revenue
+        net_roi = revenue_saved - retention_budget
+        roi_percent = round((net_roi / retention_budget) * 100, 1) if retention_budget > 0 else 0
+
+        c1, c2 = st.columns(2)
+        c1.metric("Monthly Churners", f"{monthly_churners:,}")
+        c2.metric("Revenue at Risk", f"${revenue_lost_no_action:,.0f}")
+        c1.metric("Customers Targeted", f"{customers_targeted:,}")
+        c2.metric("Customers Saved", f"{customers_saved:,}")
+        c1.metric("Revenue Saved", f"${revenue_saved:,.0f}", delta=f"+${revenue_saved:,.0f}")
+        c2.metric("Net ROI", f"${net_roi:,.0f}", delta=f"{roi_percent}%")
+
+        if net_roi > 0:
+            st.success(f"For every $1 spent on retention, you get back ${round((revenue_saved/retention_budget), 2)} in saved revenue!")
+        else:
+            st.warning("Retention budget exceeds saved revenue — consider reducing cost per intervention or increasing success rate.")
+
+    st.markdown("---")
+    st.subheader("12-Month ROI Projection")
+
+    months = list(range(1, 13))
+    cumulative_saved = [revenue_saved * m for m in months]
+    cumulative_spent = [retention_budget * m for m in months]
+    cumulative_net = [s - c for s, c in zip(cumulative_saved, cumulative_spent)]
+
+    fig_roi = go.Figure()
+    fig_roi.add_trace(go.Scatter(x=months, y=cumulative_saved,
+                                  mode="lines+markers", name="Revenue Saved",
+                                  line=dict(color="#22c55e", width=2)))
+    fig_roi.add_trace(go.Scatter(x=months, y=cumulative_spent,
+                                  mode="lines+markers", name="Retention Spend",
+                                  line=dict(color="#ef4444", width=2)))
+    fig_roi.add_trace(go.Scatter(x=months, y=cumulative_net,
+                                  mode="lines+markers", name="Net Profit",
+                                  line=dict(color="#6366f1", width=2, dash="dash")))
+    fig_roi.update_layout(title="Cumulative 12-Month ROI",
+                          xaxis_title="Month", yaxis_title="USD ($)", height=400)
+    st.plotly_chart(fig_roi, use_container_width=True)
+
+    st.markdown("---")
+    st.subheader("Sensitivity Analysis")
+    st.markdown("How does ROI change as success rate varies?")
+
+    success_rates = list(range(10, 100, 10))
+    rois = []
+    for sr in success_rates:
+        cs = int(customers_targeted * sr / 100)
+        rs = cs * avg_monthly_revenue
+        rois.append(round((rs - retention_budget) / retention_budget * 100, 1))
+
+    fig_sens = px.bar(x=success_rates, y=rois,
+                      labels={"x": "Success Rate (%)", "y": "ROI (%)"},
+                      color=rois,
+                      color_continuous_scale=["#ef4444", "#f59e0b", "#22c55e"],
+                      title="ROI Sensitivity to Intervention Success Rate")
+    st.plotly_chart(fig_sens, use_container_width=True)
