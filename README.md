@@ -5,6 +5,32 @@ A production-grade customer churn prediction system with stacking ensemble ML, S
 ## 🚀 Live Demo
 👉 [View Live Dashboard](https://churnsight-rtq6ec42ckielfkzgc8q9o.streamlit.app)
 
+
+## 📸 Screenshots
+
+### Overview
+![Overview](screenshots/overview.png)
+
+### Customer Risk Table
+![Risk Table](screenshots/risk_table.png)
+
+### Model Performance
+![Model Performance](screenshots/model_performance.png)
+
+### Customer Health Score
+![Health Score](screenshots/health_score.png)
+
+### Threshold Tuner
+![Threshold Tuner](screenshots/threshold_tuner.png)
+
+### What-if Simulator
+![Simulator](screenshots/simulator.png)
+
+### ROI Simulator
+![ROI Simulator](screenshots/roi_simulator.png)
+
+
+
 ## ✨ Features
 - **Stacking Ensemble** — XGBoost + LightGBM → Logistic Regression meta-learner tuned with Optuna
 - **SHAP Explainability** — per-customer churn driver analysis with waterfall charts
