@@ -3,7 +3,8 @@ import pickle
 import os
 from xgboost import XGBClassifier
 from lightgbm import LGBMClassifier
-from sklearn.ensemble import VotingClassifier
+from sklearn.ensemble import StackingClassifier
+from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (roc_auc_score, f1_score, precision_score,
                              recall_score, accuracy_score, confusion_matrix,
                              roc_curve)
@@ -12,6 +13,8 @@ import warnings
 warnings.filterwarnings('ignore')
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 
+import sys
+sys.path.append(os.path.dirname(__file__))
 from preprocess import run_preprocessing
 
 def objective_xgb(trial, X_train, y_train, X_test, y_test):
@@ -21,6 +24,7 @@ def objective_xgb(trial, X_train, y_train, X_test, y_test):
         'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.3),
         'subsample': trial.suggest_float('subsample', 0.6, 1.0),
         'colsample_bytree': trial.suggest_float('colsample_bytree', 0.6, 1.0),
+        'n_jobs': -1,
         'use_label_encoder': False,
         'eval_metric': 'logloss',
         'random_state': 42
@@ -38,14 +42,15 @@ def objective_lgbm(trial, X_train, y_train, X_test, y_test):
         'subsample': trial.suggest_float('subsample', 0.6, 1.0),
         'colsample_bytree': trial.suggest_float('colsample_bytree', 0.6, 1.0),
         'random_state': 42,
-        'verbose': -1
+        'verbose': -1,
+        'n_jobs': -1
     }
     model = LGBMClassifier(**params)
     model.fit(X_train, y_train)
     preds = model.predict_proba(X_test)[:, 1]
     return roc_auc_score(y_test, preds)
 
-def tune_models(X_train, y_train, X_test, y_test, n_trials=20):
+def tune_models(X_train, y_train, X_test, y_test, n_trials=30):
     print("🔍 Tuning XGBoost...")
     study_xgb = optuna.create_study(direction='maximize')
     study_xgb.optimize(
@@ -53,7 +58,7 @@ def tune_models(X_train, y_train, X_test, y_test, n_trials=20):
         n_trials=n_trials
     )
     best_xgb_params = study_xgb.best_params
-    best_xgb_params.update({'use_label_encoder': False,
+    best_xgb_params.update({'use_label_encoder': False, 'n_jobs': -1,
                              'eval_metric': 'logloss', 'random_state': 42})
 
     print("🔍 Tuning LightGBM...")
@@ -63,22 +68,34 @@ def tune_models(X_train, y_train, X_test, y_test, n_trials=20):
         n_trials=n_trials
     )
     best_lgbm_params = study_lgbm.best_params
-    best_lgbm_params.update({'random_state': 42, 'verbose': -1})
+    best_lgbm_params.update({'random_state': 42, 'verbose': -1, 'n_jobs': -1})
 
     print(f"✅ Best XGB AUC: {study_xgb.best_value:.4f}")
     print(f"✅ Best LGBM AUC: {study_lgbm.best_value:.4f}")
 
     return best_xgb_params, best_lgbm_params
 
-def build_ensemble(best_xgb_params, best_lgbm_params):
+def build_stacking_ensemble(best_xgb_params, best_lgbm_params):
     xgb = XGBClassifier(**best_xgb_params)
     lgbm = LGBMClassifier(**best_lgbm_params)
 
-    ensemble = VotingClassifier(
-        estimators=[('xgb', xgb), ('lgbm', lgbm)],
-        voting='soft'
+    # Meta-learner: Logistic Regression
+    meta_learner = LogisticRegression(
+        random_state=42,
+        max_iter=1000,
+        C=0.1
     )
-    return ensemble
+
+    # Stacking ensemble
+    stacking = StackingClassifier(
+        estimators=[('xgb', xgb), ('lgbm', lgbm)],
+        final_estimator=meta_learner,
+        cv=5,
+        stack_method='predict_proba',
+        n_jobs=-1,
+        passthrough=False
+    )
+    return stacking
 
 def evaluate_model(model, X_test, y_test):
     y_pred = model.predict(X_test)
@@ -93,7 +110,6 @@ def evaluate_model(model, X_test, y_test):
         'confusion_matrix': confusion_matrix(y_test, y_pred).tolist()
     }
 
-    # ROC curve data
     fpr, tpr, _ = roc_curve(y_test, y_prob)
     metrics['fpr'] = fpr.tolist()
     metrics['tpr'] = tpr.tolist()
@@ -117,33 +133,24 @@ def save_model(model, scaler, feature_names, metrics):
         pickle.dump(feature_names, f)
     with open('models/metrics.pkl', 'wb') as f:
         pickle.dump(metrics, f)
-    print("\n✅ Model and artifacts saved to models/")
+    print("\n✅ Stacking ensemble saved to models/")
 
 def train_pipeline(data_path='data/telco_churn.csv'):
-    print("🚀 Starting ChurnSight Training Pipeline\n")
+    print("🚀 Starting ChurnSight Stacking Ensemble Pipeline\n")
 
-    # Preprocess
     X_train, X_test, y_train, y_test, scaler, feature_names = run_preprocessing(data_path)
+    best_xgb, best_lgbm = tune_models(X_train, y_train, X_test, y_test, n_trials=30)
 
-    # Tune
-    best_xgb, best_lgbm = tune_models(X_train, y_train, X_test, y_test, n_trials=20)
+    print("\n🏗️ Building Stacking Ensemble (XGB + LGBM → Logistic Regression)...")
+    stacking = build_stacking_ensemble(best_xgb, best_lgbm)
 
-    # Build ensemble
-    ensemble = build_ensemble(best_xgb, best_lgbm)
+    print("🏋️ Training stacking ensemble with 5-fold CV...")
+    stacking.fit(X_train, y_train)
 
-    # Train final model
-    print("\n🏋️ Training final ensemble...")
-    ensemble.fit(X_train, y_train)
+    metrics = evaluate_model(stacking, X_test, y_test)
+    save_model(stacking, scaler, feature_names, metrics)
 
-    # Evaluate
-    metrics = evaluate_model(ensemble, X_test, y_test)
-
-    # Save
-    save_model(ensemble, scaler, feature_names, metrics)
-
-    return ensemble, metrics
+    return stacking, metrics
 
 if __name__ == "__main__":
-    import sys
-    sys.path.append('src')
     train_pipeline()
