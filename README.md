@@ -1,72 +1,89 @@
-# ChurnSight - Explainable Churn Intelligence Dashboard
+# 🔭 ChurnSight — Explainable Churn Intelligence Dashboard
 
-A production-grade customer churn prediction system built with XGBoost + LightGBM ensemble, SHAP explainability, and a Streamlit dashboard.
+A production-grade customer churn prediction system with stacking ensemble ML, SHAP explainability, and a 7-page interactive Streamlit dashboard.
 
-## Features
-- XGBoost + LightGBM soft voting ensemble tuned with Optuna
-- SHAP-based per-customer churn explanations
-- Risk tier segmentation (High / Medium / Low)
-- Retention action recommender mapped to SHAP drivers
-- Business revenue impact estimator
-- Interactive Streamlit dashboard with 4 pages
-- What-if Simulator with live churn probability gauge
-- Bulk CSV scoring with downloadable results
+## 🚀 Live Demo
+👉 [View Live Dashboard](https://churnsight-rtq6ec42ckielfkzgc8q9o.streamlit.app)
 
-## Model Performance
-| Metric    | Score |
-|-----------|-------|
-| ROC-AUC   | ~0.91 |
-| F1 Score  | ~0.65 |
-| Precision | ~0.70 |
-| Recall    | ~0.62 |
+## ✨ Features
+- **Stacking Ensemble** — XGBoost + LightGBM → Logistic Regression meta-learner tuned with Optuna
+- **SHAP Explainability** — per-customer churn driver analysis with waterfall charts
+- **Risk Tier Segmentation** — High / Medium / Low risk classification
+- **Retention Recommender** — maps SHAP drivers to actionable business interventions
+- **What-if Simulator** — live churn probability gauge updated in real time
+- **ROI Simulator** — 12-month retention ROI projection with sensitivity analysis
+- **Customer Health Score** — 0-100 composite score per customer
+- **Threshold Tuner** — optimize Precision vs Recall for business needs
+- **Churn Trend Simulation** — projected customer base with/without retention
+- **Bulk CSV Scorer** — score entire customer base with downloadable results
 
-## Tech Stack
-- Python, Pandas, NumPy
-- XGBoost, LightGBM, Scikit-learn
-- SHAP, Optuna, Imbalanced-learn
-- Streamlit, Plotly
+## 📊 Model Performance
+| Metric    | Score  |
+|-----------|--------|
+| ROC-AUC   | ~0.84  |
+| F1 Score  | ~0.61  |
+| Precision | ~0.52  |
+| Recall    | ~0.74  |
+| Accuracy  | ~0.75  |
 
-## Setup
+## 🛠️ Tech Stack
+- **ML**: XGBoost, LightGBM, Scikit-learn, SHAP, Optuna
+- **Data**: Pandas, NumPy, Imbalanced-learn (SMOTE)
+- **Dashboard**: Streamlit, Plotly
+- **Deployment**: Streamlit Cloud
 
-1. Clone the repo
+## 📁 Project Structure
+```
+churnsight/
+├── data/                    # Dataset (not tracked)
+├── src/
+│   ├── preprocess.py        # Cleaning, encoding, SMOTE
+│   ├── train.py             # Stacking ensemble + Optuna tuning
+│   ├── explain.py           # SHAP explainability
+│   ├── risk_segmentor.py    # Risk tier assignment
+│   ├── recommender.py       # Retention action recommender
+│   └── analytics.py        # Health score, churn simulation
+├── app/
+│   └── dashboard.py         # 7-page Streamlit dashboard
+├── models/                  # Trained model artifacts
+└── requirements.txt
+```
+
+## ⚙️ Setup
+```bash
+# Clone the repo
 git clone https://github.com/sanjanamandal1/churnsight.git
 cd churnsight
 
-2. Create virtual environment
+# Create virtual environment
 python -m venv venv
-venv\Scripts\activate
+venv\Scripts\activate  # Windows
+source venv/bin/activate  # Mac/Linux
 
-3. Install dependencies
+# Install dependencies
 pip install -r requirements.txt
 
-4. Add dataset
-Download telco_churn.csv from Kaggle and place in data/
-https://www.kaggle.com/datasets/blastchar/telco-customer-churn
+# Add dataset
+# Download telco_churn.csv from Kaggle and place in data/
+# https://www.kaggle.com/datasets/blastchar/telco-customer-churn
 
-5. Train the model
+# Train the model
 python src/train.py
 
-6. Run the dashboard
+# Run the dashboard
 streamlit run app/dashboard.py
+```
 
-7. Run the What-if Simulator
-streamlit run app/simulator.py
+## 📸 Dashboard Pages
+1. **Overview** — KPIs, churn by contract, risk tier distribution
+2. **Customer Risk Table** — filterable table with SHAP deep dive
+3. **Bulk Scorer** — CSV upload and download
+4. **Model Performance** — ROC curve, confusion matrix
+5. **Advanced Analytics** — Health Score, Threshold Tuner, Churn Trend
+6. **What-if Simulator** — live churn gauge with recommendations
+7. **ROI Simulator** — 12-month ROI projection and sensitivity analysis
 
-## Project Structure
-churnsight/
-- data/                  Dataset (not tracked)
-- src/
-  - preprocess.py        Data cleaning, encoding, SMOTE
-  - train.py             Ensemble training + Optuna tuning
-  - explain.py           SHAP explainability
-  - risk_segmentor.py    Risk tier assignment
-  - recommender.py       Retention action recommender
-- app/
-  - dashboard.py         Streamlit dashboard (4 pages)
-  - simulator.py         What-if Churn Simulator
-- models/                Saved model artifacts (not tracked)
-- requirements.txt
-
-## Author
-Sanjana Mandal
-github.com/sanjanamandal1
+## 👩‍💻 Author
+**Sanjana Mandal**
+- GitHub: [github.com/sanjanamandal1](https://github.com/sanjanamandal1)
+- LinkedIn: [linkedin.com/in/sanjana-mandal-956460285](https://www.linkedin.com/in/sanjana-mandal-956460285/)
