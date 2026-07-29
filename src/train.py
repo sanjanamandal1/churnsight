@@ -5,6 +5,7 @@ from xgboost import XGBClassifier
 from lightgbm import LGBMClassifier
 from sklearn.ensemble import StackingClassifier
 from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import cross_val_score
 from sklearn.metrics import (roc_auc_score, f1_score, precision_score,
                              recall_score, accuracy_score, confusion_matrix,
                              roc_curve)
@@ -17,7 +18,7 @@ import sys
 sys.path.append(os.path.dirname(__file__))
 from preprocess import run_preprocessing
 
-def objective_xgb(trial, X_train, y_train, X_test, y_test):
+def objective_xgb(trial, X_train, y_train):
     params = {
         'n_estimators': trial.suggest_int('n_estimators', 100, 500),
         'max_depth': trial.suggest_int('max_depth', 3, 8),
@@ -30,11 +31,10 @@ def objective_xgb(trial, X_train, y_train, X_test, y_test):
         'random_state': 42
     }
     model = XGBClassifier(**params)
-    model.fit(X_train, y_train)
-    preds = model.predict_proba(X_test)[:, 1]
-    return roc_auc_score(y_test, preds)
+    scores = cross_val_score(model, X_train, y_train, cv=3, scoring='roc_auc', n_jobs=-1)
+    return scores.mean()
 
-def objective_lgbm(trial, X_train, y_train, X_test, y_test):
+def objective_lgbm(trial, X_train, y_train):
     params = {
         'n_estimators': trial.suggest_int('n_estimators', 100, 500),
         'max_depth': trial.suggest_int('max_depth', 3, 8),
@@ -46,32 +46,31 @@ def objective_lgbm(trial, X_train, y_train, X_test, y_test):
         'n_jobs': -1
     }
     model = LGBMClassifier(**params)
-    model.fit(X_train, y_train)
-    preds = model.predict_proba(X_test)[:, 1]
-    return roc_auc_score(y_test, preds)
+    scores = cross_val_score(model, X_train, y_train, cv=3, scoring='roc_auc', n_jobs=-1)
+    return scores.mean()
 
-def tune_models(X_train, y_train, X_test, y_test, n_trials=30):
-    print("🔍 Tuning XGBoost...")
+def tune_models(X_train, y_train, n_trials=30):
+    print("[*] Tuning XGBoost (3-fold CV on training set)...")
     study_xgb = optuna.create_study(direction='maximize')
     study_xgb.optimize(
-        lambda trial: objective_xgb(trial, X_train, y_train, X_test, y_test),
+        lambda trial: objective_xgb(trial, X_train, y_train),
         n_trials=n_trials
     )
     best_xgb_params = study_xgb.best_params
     best_xgb_params.update({'use_label_encoder': False, 'n_jobs': -1,
                              'eval_metric': 'logloss', 'random_state': 42})
 
-    print("🔍 Tuning LightGBM...")
+    print("[*] Tuning LightGBM (3-fold CV on training set)...")
     study_lgbm = optuna.create_study(direction='maximize')
     study_lgbm.optimize(
-        lambda trial: objective_lgbm(trial, X_train, y_train, X_test, y_test),
+        lambda trial: objective_lgbm(trial, X_train, y_train),
         n_trials=n_trials
     )
     best_lgbm_params = study_lgbm.best_params
     best_lgbm_params.update({'random_state': 42, 'verbose': -1, 'n_jobs': -1})
 
-    print(f"✅ Best XGB AUC: {study_xgb.best_value:.4f}")
-    print(f"✅ Best LGBM AUC: {study_lgbm.best_value:.4f}")
+    print(f"[+] Best XGB CV AUC: {study_xgb.best_value:.4f}")
+    print(f"[+] Best LGBM CV AUC: {study_lgbm.best_value:.4f}")
 
     return best_xgb_params, best_lgbm_params
 
@@ -97,7 +96,7 @@ def build_stacking_ensemble(best_xgb_params, best_lgbm_params):
     )
     return stacking
 
-def evaluate_model(model, X_test, y_test):
+def evaluate_model(model, X_test, y_test, scaler=None):
     y_pred = model.predict(X_test)
     y_prob = model.predict_proba(X_test)[:, 1]
 
@@ -107,14 +106,15 @@ def evaluate_model(model, X_test, y_test):
         'precision': round(precision_score(y_test, y_pred), 4),
         'recall': round(recall_score(y_test, y_pred), 4),
         'accuracy': round(accuracy_score(y_test, y_pred), 4),
-        'confusion_matrix': confusion_matrix(y_test, y_pred).tolist()
+        'confusion_matrix': confusion_matrix(y_test, y_pred).tolist(),
+        'monthly_charges_median': getattr(scaler, 'monthly_charges_median_', 64.76) if scaler else 64.76
     }
 
     fpr, tpr, _ = roc_curve(y_test, y_prob)
     metrics['fpr'] = fpr.tolist()
     metrics['tpr'] = tpr.tolist()
 
-    print("\n📊 Model Performance:")
+    print("\n[+] Model Performance:")
     print(f"  ROC-AUC  : {metrics['roc_auc']}")
     print(f"  F1 Score : {metrics['f1']}")
     print(f"  Precision: {metrics['precision']}")
@@ -133,21 +133,21 @@ def save_model(model, scaler, feature_names, metrics):
         pickle.dump(feature_names, f)
     with open('models/metrics.pkl', 'wb') as f:
         pickle.dump(metrics, f)
-    print("\n✅ Stacking ensemble saved to models/")
+    print("\n[+] Stacking ensemble saved to models/")
 
 def train_pipeline(data_path='data/telco_churn.csv'):
-    print("🚀 Starting ChurnSight Stacking Ensemble Pipeline\n")
+    print("[*] Starting ChurnSight Stacking Ensemble Pipeline\n")
 
     X_train, X_test, y_train, y_test, scaler, feature_names = run_preprocessing(data_path)
-    best_xgb, best_lgbm = tune_models(X_train, y_train, X_test, y_test, n_trials=30)
+    best_xgb, best_lgbm = tune_models(X_train, y_train, n_trials=30)
 
-    print("\n🏗️ Building Stacking Ensemble (XGB + LGBM → Logistic Regression)...")
+    print("\n[*] Building Stacking Ensemble (XGB + LGBM -> Logistic Regression)...")
     stacking = build_stacking_ensemble(best_xgb, best_lgbm)
 
-    print("🏋️ Training stacking ensemble with 5-fold CV...")
+    print("[*] Training stacking ensemble with 5-fold CV...")
     stacking.fit(X_train, y_train)
 
-    metrics = evaluate_model(stacking, X_test, y_test)
+    metrics = evaluate_model(stacking, X_test, y_test, scaler=scaler)
     save_model(stacking, scaler, feature_names, metrics)
 
     return stacking, metrics

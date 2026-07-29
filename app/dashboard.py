@@ -1,4 +1,4 @@
-﻿import sys
+import sys
 import os
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(ROOT, 'src')
@@ -55,6 +55,29 @@ def load_css():
     if os.path.exists(css_path):
         with open(css_path) as f:
             st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+
+def score_custom_dataframe(df_raw, model, scaler, feature_names):
+    from preprocess import clean_data, feature_engineering, encode_features
+    df_clean = clean_data(df_raw.copy())
+    df_fe = feature_engineering(df_clean)
+    df_enc = encode_features(df_fe)
+
+    for col in feature_names:
+        if col not in df_enc.columns:
+            df_enc[col] = 0
+
+    X_custom = df_enc[feature_names].copy()
+    num_cols = ['tenure', 'MonthlyCharges', 'TotalCharges', 'charges_per_tenure']
+    X_custom[num_cols] = scaler.transform(X_custom[num_cols])
+
+    probs = model.predict_proba(X_custom)[:, 1]
+    df_scored = df_raw.copy()
+    df_scored["churn_probability"] = probs
+    df_scored["risk_tier"] = assign_risk_tiers(probs)
+
+    shap_df = batch_explain(model, feature_names, X_custom)
+    df_scored = get_bulk_recommendations(df_scored, shap_df)
+    return df_scored
 
 st.sidebar.image("https://img.icons8.com/fluency/96/telescope.png", width=60)
 st.sidebar.title("ChurnSight")
@@ -198,14 +221,36 @@ elif page == "Customer Risk Table":
 # -----------------------------------------------------------------------
 elif page == "Bulk Scorer":
     st.title("Bulk CSV Scorer")
-    st.markdown("Upload a customer CSV to get churn scores and recommendations.")
+    st.markdown("Upload a customer CSV to get churn scores, risk tiers, and retention recommendations.")
     st.markdown("---")
 
     uploaded = st.file_uploader("Upload CSV file", type=["csv"])
     if uploaded:
-        df_upload = pd.read_csv(uploaded)
-        st.write("Preview:", df_upload.head())
-        st.info("File uploaded! Full bulk scoring pipeline coming in next version.")
+        try:
+            df_upload = pd.read_csv(uploaded)
+            st.subheader("Uploaded Dataset Preview")
+            st.dataframe(df_upload.head(5), use_container_width=True)
+
+            with st.spinner("Running ChurnSight Stacking Ensemble & SHAP Pipeline..."):
+                scored_custom = score_custom_dataframe(df_upload, model, scaler, feature_names)
+
+            st.success(f"✅ Successfully scored {len(scored_custom)} customers!")
+
+            c1, c2, c3 = st.columns(3)
+            c1.metric("High Risk Customers", len(scored_custom[scored_custom["risk_tier"] == "High Risk"]))
+            c2.metric("Medium Risk Customers", len(scored_custom[scored_custom["risk_tier"] == "Medium Risk"]))
+            c3.metric("Low Risk Customers", len(scored_custom[scored_custom["risk_tier"] == "Low Risk"]))
+
+            st.markdown("---")
+            st.subheader("Scored Customer Results")
+            display_cols = [c for c in ["customerID", "gender", "tenure", "MonthlyCharges", "TotalCharges", "churn_probability", "risk_tier", "top_recommendation"] if c in scored_custom.columns]
+            st.dataframe(scored_custom[display_cols].reset_index(drop=True), use_container_width=True, height=400)
+
+            csv_out = scored_custom.to_csv(index=False)
+            st.download_button("📥 Download Full Scored Results (CSV)",
+                                data=csv_out, file_name="churnsight_scored_results.csv", mime="text/csv")
+        except Exception as e:
+            st.error(f"Error processing uploaded CSV: {e}")
     else:
         st.markdown("### Download sample scored data")
         sample = scored_df[["gender", "tenure", "MonthlyCharges",
@@ -411,8 +456,8 @@ elif page == "What-if Simulator":
         row["Partner"] = 1 if inputs["Partner"] == "Yes" else 0
         row["Dependents"] = 1 if inputs["Dependents"] == "Yes" else 0
         row["PhoneService"] = 1 if inputs["PhoneService"] == "Yes" else 0
-        row["PaperlessBilling"] = 1 if inputs["PaperlessBilling"] == "Yes" else 0
-        row["high_value"] = 1 if inputs["MonthlyCharges"] > 64.76 else 0
+        median_charge = getattr(scaler, 'monthly_charges_median_', metrics.get('monthly_charges_median', 64.76))
+        row["high_value"] = 1 if inputs["MonthlyCharges"] > median_charge else 0
         tg_map = {"0-1yr": 0, "1-2yr": 1, "2-4yr": 2, "4-5yr": 3, "5-6yr": 4}
         row["tenure_group"] = tg_map.get(inputs["tenure_group"], 0)
         contract_col = "Contract_" + inputs["Contract"]

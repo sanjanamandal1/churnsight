@@ -38,10 +38,12 @@ def explain_customer(model, feature_names, customer_df):
     explainer = get_shap_explainer(model, customer_df)
     shap_vals = get_shap_values(explainer, customer_df)
 
-    if len(customer_df) == 1:
+    if hasattr(shap_vals, "ndim") and shap_vals.ndim > 1:
         row_shap = shap_vals[0]
+    elif isinstance(shap_vals, list) and len(shap_vals) > 0:
+        row_shap = np.array(shap_vals[0])[0] if len(np.array(shap_vals[0]).shape) > 1 else np.array(shap_vals[0])
     else:
-        row_shap = shap_vals
+        row_shap = np.array(shap_vals).ravel()
 
     top_pos, top_neg = get_top_drivers(row_shap, feature_names)
 

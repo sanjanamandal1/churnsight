@@ -1,4 +1,4 @@
-﻿import streamlit as st
+import streamlit as st
 import pandas as pd
 import numpy as np
 import pickle
@@ -58,8 +58,8 @@ def build_input_vector(inputs, feature_names, scaler):
     row["Partner"] = 1 if inputs["Partner"] == "Yes" else 0
     row["Dependents"] = 1 if inputs["Dependents"] == "Yes" else 0
     row["PhoneService"] = 1 if inputs["PhoneService"] == "Yes" else 0
-    row["PaperlessBilling"] = 1 if inputs["PaperlessBilling"] == "Yes" else 0
-    row["high_value"] = 1 if inputs["MonthlyCharges"] > 64.76 else 0
+    median_charge = getattr(scaler, 'monthly_charges_median_', 64.76)
+    row["high_value"] = 1 if inputs["MonthlyCharges"] > median_charge else 0
     tg_map = {"0-1yr": 0, "1-2yr": 1, "2-4yr": 2, "4-5yr": 3, "5-6yr": 4}
     row["tenure_group"] = tg_map.get(inputs["tenure_group"], 0)
     contract_col = "Contract_" + inputs["Contract"]
