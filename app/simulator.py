@@ -9,7 +9,7 @@ from preprocess import run_preprocessing
 from explain import get_shap_explainer, get_top_drivers
 from recommender import get_recommendations
 
-st.set_page_config(page_title="ChurnSight Simulator", page_icon="lightning", layout="wide")
+st.set_page_config(page_title="ChurnSight — Simulator", page_icon="⚡", layout="wide")
 
 @st.cache_resource
 def load_artifacts():
@@ -21,23 +21,37 @@ def load_artifacts():
         feature_names = pickle.load(f)
     return model, scaler, feature_names
 
+def apply_executive_theme(fig, title=""):
+    fig.update_layout(
+        template="plotly_dark",
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(family="Plus Jakarta Sans, sans-serif", color="#9ca3af", size=12),
+        title=dict(text=title, font=dict(color="#f3f4f6", size=15, weight=600)),
+        margin=dict(l=20, r=20, t=40, b=20),
+        xaxis=dict(gridcolor="#1f2937", zerolinecolor="#1f2937"),
+        yaxis=dict(gridcolor="#1f2937", zerolinecolor="#1f2937")
+    )
+    return fig
+
 def make_gauge(probability):
-    color = "#ef4444" if probability >= 0.7 else "#f59e0b" if probability >= 0.4 else "#22c55e"
+    color = "#f43f5e" if probability >= 0.7 else "#f59e0b" if probability >= 0.4 else "#10b981"
     fig = go.Figure(go.Indicator(
         mode="gauge+number",
         value=round(probability * 100, 1),
-        title={"text": "Churn Probability %", "font": {"size": 20}},
+        title={"text": "Churn Risk %", "font": {"size": 16, "color": "#9ca3af"}},
         gauge={
-            "axis": {"range": [0, 100]},
+            "axis": {"range": [0, 100], "tickcolor": "#4b5563"},
             "bar": {"color": color},
             "steps": [
-                {"range": [0, 40], "color": "#dcfce7"},
-                {"range": [40, 70], "color": "#fef9c3"},
-                {"range": [70, 100], "color": "#fee2e2"},
+                {"range": [0, 40], "color": "#064e3b"},
+                {"range": [40, 70], "color": "#78350f"},
+                {"range": [70, 100], "color": "#881337"},
             ]
         }
     ))
-    fig.update_layout(height=300)
+    apply_executive_theme(fig, "")
+    fig.update_layout(height=260)
     return fig
 
 def build_input_vector(inputs, feature_names, scaler):
@@ -58,6 +72,7 @@ def build_input_vector(inputs, feature_names, scaler):
     row["Partner"] = 1 if inputs["Partner"] == "Yes" else 0
     row["Dependents"] = 1 if inputs["Dependents"] == "Yes" else 0
     row["PhoneService"] = 1 if inputs["PhoneService"] == "Yes" else 0
+    row["PaperlessBilling"] = 1 if inputs["PaperlessBilling"] == "Yes" else 0
     median_charge = getattr(scaler, 'monthly_charges_median_', 64.76)
     row["high_value"] = 1 if inputs["MonthlyCharges"] > median_charge else 0
     tg_map = {"0-1yr": 0, "1-2yr": 1, "2-4yr": 2, "4-5yr": 3, "5-6yr": 4}
@@ -82,21 +97,21 @@ def build_input_vector(inputs, feature_names, scaler):
 model, scaler, feature_names = load_artifacts()
 
 st.title("What-if Churn Simulator")
-st.markdown("Adjust customer attributes and see churn probability change in real time.")
+st.markdown("<p style='color:#9ca3af; font-size:0.9rem;'>Adjust customer parameters and evaluate churn risk in real time.</p>", unsafe_allow_html=True)
 st.markdown("---")
 
 col_inputs, col_result = st.columns([1, 1])
 
 with col_inputs:
-    st.subheader("Customer Attributes")
+    st.subheader("Account Parameters")
     gender = st.selectbox("Gender", ["Male", "Female"])
     senior = st.selectbox("Senior Citizen", [0, 1])
     partner = st.selectbox("Partner", ["Yes", "No"])
     dependents = st.selectbox("Dependents", ["Yes", "No"])
-    tenure = st.slider("Tenure (months)", 0, 72, 12)
+    tenure = st.slider("Tenure (Months)", 0, 72, 12)
     phone = st.selectbox("Phone Service", ["Yes", "No"])
     internet = st.selectbox("Internet Service", ["Fiber optic", "DSL", "No"])
-    contract = st.selectbox("Contract", ["Month-to-month", "One year", "Two year"])
+    contract = st.selectbox("Contract Type", ["Month-to-month", "One year", "Two year"])
     tech_support = st.selectbox("Tech Support", ["Yes", "No", "No internet service"])
     security = st.selectbox("Online Security", ["Yes", "No", "No internet service"])
     payment = st.selectbox("Payment Method", ["Electronic check", "Mailed check", "Bank transfer (automatic)", "Credit card (automatic)"])
@@ -118,24 +133,24 @@ with col_inputs:
     }
 
 with col_result:
-    st.subheader("Live Churn Prediction")
+    st.subheader("Real-Time Prediction")
     try:
         X_input = build_input_vector(inputs, feature_names, scaler)
         prob = model.predict_proba(X_input)[0][1]
         st.plotly_chart(make_gauge(prob), use_container_width=True)
         if prob >= 0.70:
-            st.error("HIGH RISK - Immediate action recommended!")
+            st.error("HIGH RISK — Action Required")
         elif prob >= 0.40:
-            st.warning("MEDIUM RISK - Monitor and engage proactively")
+            st.warning("MEDIUM RISK — Monitor Profile")
         else:
-            st.success("LOW RISK - Customer is likely to stay")
+            st.success("LOW RISK — Stable Customer")
         st.markdown("---")
-        st.subheader("Recommended Actions")
+        st.subheader("Recommended Retention Interventions")
         shap_explainer = get_shap_explainer(model, X_input)
         shap_vals = shap_explainer.shap_values(X_input)[0]
         top_pos, _ = get_top_drivers(shap_vals, feature_names)
         recs = get_recommendations(top_pos)
         for r in recs[:3]:
-            st.info(r["icon"] + " " + r["action"] + " — " + r["reason"] + " [" + r["priority"] + " Priority]")
+            st.info(f"{r['icon']} **{r['action']}** — _{r['reason']}_")
     except Exception as e:
-        st.error("Error: " + str(e))
+        st.error("Simulation error: " + str(e))
