@@ -46,7 +46,7 @@ A production-grade customer churn prediction system with stacking ensemble ML, S
 ## 📊 Model Performance
 | Metric    | Score  |
 |-----------|--------|
-| ROC-AUC   | ~0.84  |
+| ROC-AUC   | ~0.81  |
 | F1 Score  | ~0.61  |
 | Precision | ~0.52  |
 | Recall    | ~0.74  |
