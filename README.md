@@ -1,4 +1,4 @@
-# 🔭 ChurnSight — Explainable Churn Intelligence Dashboard
+#  ChurnSight — Explainable Churn Intelligence Dashboard
 
 A production-grade customer churn prediction system with stacking ensemble ML, SHAP explainability, and a 7-page interactive Streamlit dashboard.
 
@@ -31,7 +31,7 @@ A production-grade customer churn prediction system with stacking ensemble ML, S
 
 
 
-## ✨ Features
+## Features
 - **Stacking Ensemble** — XGBoost + LightGBM → Logistic Regression meta-learner tuned with Optuna
 - **SHAP Explainability** — per-customer churn driver analysis with waterfall charts
 - **Risk Tier Segmentation** — High / Medium / Low risk classification
